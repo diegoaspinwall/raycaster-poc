@@ -2,24 +2,48 @@
 #define RAYS_H
 
 #include <stdbool.h>
-#include "vector_operations.h"
+#include <stdint.h>
+#include "vector.h"
 
-typdef struct {
-	bool	happened;
-	double	distance;
-	double	angle; // or normal? or dot product?
-	point*	location;
-} collision;
+// Epsilon for intersection robustness
+#ifndef RT_EPS
+#define RT_EPS 1e-8
+#endif
 
-typdef struct {
-	point*	start;
-	vector*	direction;
-} ray;
+typedef struct { Point3 origin; Vec3 dir; } Ray;
 
-collision *ray_triangle_intersect(ray *r, triangle *t);
-unsigned char dot_product_to_color(double dot_product);
-vector *pixel_position_to_ray(unsigned short x, unsigned short y);
-/* Also needs some information about direction of camera. Maybe should
-go in a different file, relating to camera position and movement. */
+// Triangle primitive (single-sided by default)
+typedef struct {
+    Point3 v0, v1, v2;
+    Vec3   n; // precomputed normal
+} Triangle;
+
+typedef struct {
+    bool   hit;
+    double t;          // ray parameter (distance along Ray.dir)
+    Point3 p;          // hit position
+    Vec3   n;          // geometric normal (unit)
+    // Vec3   albedo;     // 0..1 per channel (for now, grayscale ok)
+} Hit;
+
+// Simple pinhole camera
+typedef struct {
+    Point3 pos;
+    Vec3   forward;    // normalized
+    Vec3   right;      // normalized
+    Vec3   up;         // normalized (right-handed basis)
+    double vfov_deg;   // vertical field of view in degrees
+    double aspect;     // width / height
+} Camera;
+
+// Möller–Trumbore ray-triangle; returns true on hit in (tmin, tmax]
+bool ray_triangle_intersect(const Ray* r, const Triangle* tri,
+                            double tmin, double tmax, Hit* out);
+
+// Generate primary ray through pixel center (x,y) in [0..w-1],[0..h-1]
+Ray camera_primary_ray(const Camera* cam, int x, int y, int w, int h);
+
+// Simple Lambert term → 0..255
+uint8_t lambert_to_u8(double nDotL);
 
 #endif
