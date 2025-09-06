@@ -1,8 +1,7 @@
-// Minimal single-triangle ray tracer with a point light.
-// Build with: make raytrace  (or just: make)
+// Minimal multi-triangle ray tracer with a point light + hard shadows.
+// Build: make
 
 #include <SDL2/SDL.h>
-#include <math.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -21,23 +20,21 @@ static void render_frame(uint32_t* pixels, int pitch)
     cam.forward = vnorm(v3(0.0, 0.0, 1.0));
     cam.right   = vnorm(vcross(cam.forward, v3(0.0,1.0,0.0)));
     cam.up      = vnorm(vcross(cam.right, cam.forward));
-    cam.vfov_deg = 30.0;
+    cam.vfov_deg = 60.0;
     cam.aspect   = (double)W / (double)H;
 
-    // Single triangle in Z=0 plane
-    Triangle tri = {0};
-    tri.v0 = v3( 0.7, -0.5, 0.0);
-    tri.v1 = v3(-0.7, -0.5, 0.0);
-    tri.v2 = v3( 0.0,  0.6, 0.0);
+    // Scene: a quad in Z=0 (two tris) plus a small occluder tri at Z=0.3
+    Triangle tris[] = {
+        // Ground-ish quad (front face toward +Z)
+        { v3(0.9,-0.6,0.0), v3( -0.9,-0.6,0.0), v3( 0.9, 0.6,0.0) },
+        { v3(0.9,0.6,0.0), v3( -0.9, -0.6,0.0), v3(-0.9, 0.6,0.0) },
+        // Small occluder floating in front of the quad
+        { v3( 0.35, 0.15,-0.30), v3( 0.10,-0.10,-0.30), v3(-0.15, 0.20,-0.30) },
+    };
+    const int n_tris = (int)(sizeof(tris)/sizeof(tris[0]));
 
-    Triangle tri2 = {0};
-    tri2.v0 = v3( 0.7, -0.3, -0.2);
-    tri2.v1 = v3(-0.1, -0.3, -0.2);
-    tri2.v2 = v3( 0.3,  0.3, -0.2);
-
-    // Point light
-    Vec3 Lpos = v3(1.2, 1.0, -0.4);
-    // Vec3 Lpos = v3(1.2, 1.0, -1.5);
+    // Point light in front of the quad
+    Vec3 Lpos = v3(0.7, 0.8, -0.8);
 
     for (int y = 0; y < H; ++y) {
         uint32_t* row = (uint32_t*)((uint8_t*)pixels + y * pitch);
@@ -46,20 +43,20 @@ static void render_frame(uint32_t* pixels, int pitch)
 
             Hit best = {0};
             best.t = 1e30;
-            Hit h = {0};
-            if (ray_triangle_intersect(&ray, &tri, 1e-4, best.t, &h)) {
-                best = h;
-            }
-            if (ray_triangle_intersect(&ray, &tri2, 1e-4, best.t, &h)) {
-                best = h;
+            // Find closest intersection among all tris
+            for (int i = 0; i < n_tris; ++i) {
+                Hit h = {0};
+                if (ray_triangle_intersect(&ray, &tris[i], 1e-4, best.t, &h)) {
+                    best = h;
+                }
             }
 
             uint8_t r,g,b;
             if (best.hit) {
-                // Geometry to light
-                if (occluded_to_light(best.p, best.n, Lpos, &tri, 1, 1e-4)) {
-                    // In shadow: ambient only (or black)
-                    r = g = b = 5; // tweak to taste
+                // Shadow test
+                bool blocked = occluded_to_light(best.p, best.n, Lpos, tris, n_tris, 1e-4);
+                if (blocked) {
+                    r = g = b = 10; // in shadow: ambient only
                 } else {
                     Vec3 L = vsub(Lpos, best.p);
                     double dist2 = vlen2(L);
@@ -85,7 +82,7 @@ int main(void)
         return 1;
     }
 
-    SDL_Window* win = SDL_CreateWindow("Raytrace — single triangle", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, W, H, 0);
+    SDL_Window* win = SDL_CreateWindow("Raytrace — shadows", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, W, H, 0);
     SDL_Renderer* ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_Texture* tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, W, H);
 
