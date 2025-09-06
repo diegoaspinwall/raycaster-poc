@@ -9,32 +9,32 @@
 #include "vector.h"
 #include "rays.h"
 
-#define W  640
-#define H  360
+#define W  1280
+#define H  720
+
+Triangle tris[] = {
+    { .v0 = {  20.0,  20.0, 0.0 }, .v1 = {  20.0, -20.0, 2.0 }, .v2 = {  20.0,  20.0, 2.0 }, .albedo = { 1.0, 1.0, 1.0 } }, // +x
+    { .v0 = {  20.0, -20.0, 2.0 }, .v1 = {  20.0,  20.0, 0.0 }, .v2 = {  20.0, -20.0, 0.0 }, .albedo = { 1.0, 1.0, 1.0 } },
+};
+const int n_tris = (int)(sizeof(tris)/sizeof(tris[0]));
 
 static void render_frame(uint32_t* pixels, int pitch)
 {
     // Camera
     Camera cam = {0};
-    cam.pos = v3(0.0, 0.0, -3.0);
-    cam.forward = vnorm(v3(0.0, 0.0, 1.0));
-    cam.right   = vnorm(vcross(cam.forward, v3(0.0,1.0,0.0)));
-    cam.up      = vnorm(vcross(cam.right, cam.forward));
+    cam.pos = v3(0.0, 0.0, 1.0);
+    cam.forward = vnorm(v3(1.0, 0.0, 0.0));
+    cam.up      = vnorm(v3(0.0, 0.0, 1.0));
+    cam.right   = vnorm(vcross(cam.up, cam.forward));
     cam.vfov_deg = 60.0;
     cam.aspect   = (double)W / (double)H;
 
-    // Scene: a quad in Z=0 (two tris) plus a small occluder tri at Z=0.3
-    Triangle tris[] = {
-        // Ground-ish quad (front face toward +Z)
-        { v3(0.9,-0.6,0.0), v3( -0.9,-0.6,0.0), v3( 0.9, 0.6,0.0) },
-        { v3(0.9,0.6,0.0), v3( -0.9, -0.6,0.0), v3(-0.9, 0.6,0.0) },
-        // Small occluder floating in front of the quad
-        { v3( 0.35, 0.15,-0.30), v3( 0.10,-0.10,-0.30), v3(-0.15, 0.20,-0.30) },
-    };
-    const int n_tris = (int)(sizeof(tris)/sizeof(tris[0]));
-
     // Point light in front of the quad
-    Vec3 Lpos = v3(0.7, 0.8, -0.8);
+    Light light = {
+        .pos = v3(0.7, 0.8, -0.8),
+        .color = v3(1.0, 1.0, 1.0),   // white light
+        .intensity = 1.0              // try 1..8 to see the effect
+    };
 
     for (int y = 0; y < H; ++y) {
         uint32_t* row = (uint32_t*)((uint8_t*)pixels + y * pitch);
@@ -54,17 +54,33 @@ static void render_frame(uint32_t* pixels, int pitch)
             uint8_t r,g,b;
             if (best.hit) {
                 // Shadow test
-                bool blocked = occluded_to_light(best.p, best.n, Lpos, tris, n_tris, 1e-4);
+                bool blocked = occluded_to_light(best.p, best.n, light.pos, tris, n_tris, 1e-4);
                 if (blocked) {
                     r = g = b = 10; // in shadow: ambient only
                 } else {
-                    Vec3 L = vsub(Lpos, best.p);
+                    Vec3 L = vsub(light.pos, best.p);
                     double dist2 = vlen2(L);
                     L = vscale(L, 1.0 / sqrt(dist2));
+
                     double ndotl = vdot(best.n, L);
-                    double lambert = fmax(0.0, ndotl) / (1.0 + 0.002*dist2);
-                    uint8_t c = lambert_to_u8(lambert);
-                    r = g = b = c;
+                    double diffuse = fmax(0.0, ndotl);
+
+                    // Irradiance from light: intensity scales brightness
+                    double atten = 1.0 / (1.0 + 0.002*dist2);
+
+                    double E = light.intensity * diffuse * atten;
+
+                    double rr = best.albedo.x * light.color.x * E;
+                    double gg = best.albedo.y * light.color.y * E;
+                    double bb = best.albedo.z * light.color.z * E;
+
+                    rr = rr < 0.0 ? 0.0 : (rr > 1.0 ? 1.0 : rr);
+                    gg = gg < 0.0 ? 0.0 : (gg > 1.0 ? 1.0 : gg);
+                    bb = bb < 0.0 ? 0.0 : (bb > 1.0 ? 1.0 : bb);
+
+                    r = (uint8_t)(rr * 255.0 + 0.5);
+                    g = (uint8_t)(gg * 255.0 + 0.5);
+                    b = (uint8_t)(bb * 255.0 + 0.5);
                 }
             } else {
                 r = g = b = 25; // background

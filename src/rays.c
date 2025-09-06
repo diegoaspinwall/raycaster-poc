@@ -26,9 +26,9 @@ bool ray_triangle_intersect(const Ray* r, const Triangle* tri,
         out->hit = true;
         out->t   = t;
         out->p   = vadd(r->origin, vscale(r->dir, t));
-        // out->n   = vnorm((tri->n.x || tri->n.y || tri->n.z) ? tri->n : vcross(e1, e2));
         out->n   = vnorm(vcross(e1, e2));
-        out->albedo = v3(1.0, 1.0, 1.0); // white default
+        out->albedo =  tri->albedo;
+        // out->albedo = v3(1.0, 1.0, 1.0); // white default
     }
     return true;
 }

@@ -15,7 +15,7 @@ typedef struct { Point3 origin; Vec3 dir; } Ray;
 // Triangle primitive (single-sided by default)
 typedef struct {
     Point3 v0, v1, v2;
-    // Vec3   n; // precomputed normal
+    Vec3   albedo;     // 0..1 per channel (for now, grayscale ok)
 } Triangle;
 
 typedef struct {
@@ -35,6 +35,12 @@ typedef struct {
     double vfov_deg;   // vertical field of view in degrees
     double aspect;     // width / height
 } Camera;
+
+typedef struct {
+    Vec3  pos;        // light position
+    Vec3  color;      // RGB in 0..1 (e.g., white = v3(1,1,1))
+    double intensity; // luminous strength scalar (try 1.0..10.0 to start)
+} Light;
 
 // Möller–Trumbore ray-triangle; returns true on hit in (tmin, tmax]
 bool ray_triangle_intersect(const Ray* r, const Triangle* tri,
