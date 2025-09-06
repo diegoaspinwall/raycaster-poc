@@ -1,48 +1,28 @@
-# Portable SDL2 Makefile using pkg-config first, then fallbacks.
+# SDL2 Raytrace (single-triangle) — focused build
 
-APP := raycaster.out
-SRC := src/main.c
-OBJ := $(SRC:.c=.o)
+RT_APP := raytrace
+RT_SRC := src/main.c src/rays.c
+RT_OBJ := $(RT_SRC:.c=.o)
+
 CFLAGS ?= -O2 -std=c11 -Wall -Wextra -Wno-unused-parameter
 
-PKG_CONFIG ?= pkg-config
-SDL_CFLAGS := $(shell $(PKG_CONFIG) --cflags sdl2 2>/dev/null)
-SDL_LIBS   := $(shell $(PKG_CONFIG) --libs   sdl2 2>/dev/null)
-
-# Fallback to sdl2-config if pkg-config not available
-ifeq ($(SDL_CFLAGS)$(SDL_LIBS),)
-SDL_CFLAGS := $(shell sdl2-config --cflags 2>/dev/null)
-SDL_LIBS   := $(shell sdl2-config --libs   2>/dev/null)
-endif
-
-# Homebrew path fallback (Apple Silicon or Intel Homebrew prefix)
-ifeq ($(SDL_CFLAGS)$(SDL_LIBS),)
-ifneq (,$(wildcard /opt/homebrew/include/SDL2/SDL.h))
-SDL_CFLAGS := -I/opt/homebrew/include/SDL2
+# Homebrew SDL2 paths (Apple Silicon). Change to /usr/local on Intel Macs if needed.
+SDL_CFLAGS := -I/opt/homebrew/include
 SDL_LIBS   := -L/opt/homebrew/lib -lSDL2
-else ifneq (,$(wildcard /usr/local/include/SDL2/SDL.h))
-SDL_CFLAGS := -I/usr/local/include/SDL2
-SDL_LIBS   := -L/usr/local/lib -lSDL2
-endif
-endif
 
-# Framework fallback for manual .framework installs on macOS
-ifeq ($(SDL_CFLAGS)$(SDL_LIBS),)
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Darwin)
-SDL_LIBS := -F/Library/Frameworks -framework SDL2
-endif
-endif
+all: $(RT_APP)
 
-all: $(APP)
+$(RT_APP): $(RT_OBJ)
+	$(CC) $(RT_OBJ) $(SDL_LIBS) -o $@
 
-$(APP): $(OBJ)
-	$(CC) $(OBJ) $(SDL_LIBS) -o $@
-
-%.o: %.c
+src/%.o: src/%.c
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(APP) $(OBJ)
+	rm -f $(RT_APP) $(RT_OBJ)
 
-.PHONY: all clean
+print-sdl:
+	@echo SDL_CFLAGS=$(SDL_CFLAGS)
+	@echo SDL_LIBS=$(SDL_LIBS)
+
+.PHONY: all clean print-sdl

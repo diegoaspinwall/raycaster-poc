@@ -1,0 +1,57 @@
+#include "rays.h"
+
+bool ray_triangle_intersect(const Ray* r, const Triangle* tri,
+                            double tmin, double tmax, Hit* out) // https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
+{
+    Vec3 e1 = vsub(tri->v1, tri->v0);
+    Vec3 e2 = vsub(tri->v2, tri->v0);
+    Vec3 p  = vcross(r->dir, e2);
+    double det = vdot(e1, p);
+
+    if (fabs(det) < RT_EPS) return false; // parallel or tiny area
+    double invDet = 1.0 / det;
+
+    Vec3 tvec = vsub(r->origin, tri->v0);
+    double u = vdot(tvec, p) * invDet;
+    if (u < 0.0 || u > 1.0) return false;
+
+    Vec3 q = vcross(tvec, e1);
+    double v = vdot(r->dir, q) * invDet;
+    if (v < 0.0 || u + v > 1.0) return false;
+
+    double t = vdot(e2, q) * invDet;
+    if (t <= tmin || t > tmax) return false;
+
+    if (out) {
+        out->hit = true;
+        out->t   = t;
+        out->p   = vadd(r->origin, vscale(r->dir, t));
+        // out->n   = vnorm((tri->n.x || tri->n.y || tri->n.z) ? tri->n : vcross(e1, e2));
+        out->n   = vnorm(vcross(e1, e2));
+        out->albedo = v3(1.0, 1.0, 1.0); // white default
+    }
+    return true;
+}
+
+Ray camera_primary_ray(const Camera* cam, int x, int y, int w, int h)
+{
+    // NDC in [-1,1] with pixel center sampling
+    double ndc_x = ( (x + 0.5) / (double)w ) * 2.0 - 1.0;
+    double ndc_y = 1.0 - ( (y + 0.5) / (double)h ) * 2.0; // flip Y
+
+    // Project to camera plane using vertical FOV
+    double th = tan((cam->vfov_deg * M_PI / 180.0) * 0.5);
+    double px = ndc_x * cam->aspect * th;
+    double py = ndc_y * th;
+
+    Vec3 dir = vnorm(vadd(cam->forward, vadd(vscale(cam->right, px),
+                                             vscale(cam->up,    py))));
+
+    return (Ray){ .origin = cam->pos, .dir = dir };
+}
+
+uint8_t lambert_to_u8(double x)
+{
+	if (x < 0.0) x = 0.0; if (x > 1.0) x = 1.0;
+	return (uint8_t)(x * 255.0 + 0.5);
+}

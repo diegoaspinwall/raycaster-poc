@@ -15,7 +15,7 @@ typedef struct { Point3 origin; Vec3 dir; } Ray;
 // Triangle primitive (single-sided by default)
 typedef struct {
     Point3 v0, v1, v2;
-    Vec3   n; // precomputed normal
+    // Vec3   n; // precomputed normal
 } Triangle;
 
 typedef struct {
@@ -23,7 +23,7 @@ typedef struct {
     double t;          // ray parameter (distance along Ray.dir)
     Point3 p;          // hit position
     Vec3   n;          // geometric normal (unit)
-    // Vec3   albedo;     // 0..1 per channel (for now, grayscale ok)
+    Vec3   albedo;     // 0..1 per channel (for now, grayscale ok)
 } Hit;
 
 // Simple pinhole camera
