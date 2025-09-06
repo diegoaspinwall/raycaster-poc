@@ -46,4 +46,8 @@ Ray camera_primary_ray(const Camera* cam, int x, int y, int w, int h);
 // Simple Lambert term → 0..255
 uint8_t lambert_to_u8(double nDotL);
 
+bool occluded_to_light(Point3 p, Vec3 n, Vec3 light_pos,
+                       const Triangle* tris, int n_tris,
+                       double bias);
+
 #endif

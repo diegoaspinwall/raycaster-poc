@@ -30,9 +30,13 @@ static void render_frame(uint32_t* pixels, int pitch)
     tri.v1 = v3(-0.7, -0.5, 0.0);
     tri.v2 = v3( 0.0,  0.6, 0.0);
 
+    Triangle tri2 = {0};
+    tri2.v0 = v3( 0.7, -0.3, -0.2);
+    tri2.v1 = v3(-0.1, -0.3, -0.2);
+    tri2.v2 = v3( 0.3,  0.3, -0.2);
+
     // Point light
-    Vec3 Lpos = v3(0.0, 0.0, -0.1);
-    // Vec3 Lpos = v3(1.2, 1.0, -0.4);
+    Vec3 Lpos = v3(1.2, 1.0, -0.4);
     // Vec3 Lpos = v3(1.2, 1.0, -1.5);
 
     for (int y = 0; y < H; ++y) {
@@ -46,16 +50,25 @@ static void render_frame(uint32_t* pixels, int pitch)
             if (ray_triangle_intersect(&ray, &tri, 1e-4, best.t, &h)) {
                 best = h;
             }
+            if (ray_triangle_intersect(&ray, &tri2, 1e-4, best.t, &h)) {
+                best = h;
+            }
 
             uint8_t r,g,b;
             if (best.hit) {
-                Vec3 L = vsub(Lpos, best.p);
-                double dist2 = vlen2(L);
-                L = vscale(L, 1.0 / sqrt(dist2));
-                double ndotl = vdot(best.n, L);
-                double lambert = (ndotl > 0.0 ? ndotl : 0.0) / (1.0 + 0.002*dist2);
-                uint8_t c = lambert_to_u8(lambert);
-                r = g = b = c;
+                // Geometry to light
+                if (occluded_to_light(best.p, best.n, Lpos, &tri, 1, 1e-4)) {
+                    // In shadow: ambient only (or black)
+                    r = g = b = 5; // tweak to taste
+                } else {
+                    Vec3 L = vsub(Lpos, best.p);
+                    double dist2 = vlen2(L);
+                    L = vscale(L, 1.0 / sqrt(dist2));
+                    double ndotl = vdot(best.n, L);
+                    double lambert = fmax(0.0, ndotl) / (1.0 + 0.002*dist2);
+                    uint8_t c = lambert_to_u8(lambert);
+                    r = g = b = c;
+                }
             } else {
                 r = g = b = 25; // background
             }

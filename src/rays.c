@@ -55,3 +55,30 @@ uint8_t lambert_to_u8(double x)
 	if (x < 0.0) x = 0.0; if (x > 1.0) x = 1.0;
 	return (uint8_t)(x * 255.0 + 0.5);
 }
+
+bool occluded_to_light(Point3 p, Vec3 n, Vec3 light_pos,
+                       const Triangle* tris, int n_tris,
+                       double bias)
+{
+    // Start the shadow ray a tiny distance above the surface to avoid self-hit (acne)
+    Point3 origin = vadd(p, vscale(n, bias));
+
+    Vec3  toL = vsub(light_pos, origin);
+    double distL = vlen(toL);
+    Vec3  dir = vscale(toL, 1.0 / (distL > 0.0 ? distL : 1.0)); // normalize safely
+
+    Ray sray = (Ray){ origin, dir };
+
+    // Any hit closer than the light blocks it
+    double tmin = 1e-4;
+    double tmax = distL - 1e-4;
+
+    Hit h;
+    for (int i = 0; i < n_tris; ++i) {
+        if (ray_triangle_intersect(&sray, &tris[i], tmin, tmax, &h)) {
+            return true; // something is between P and the light
+        }
+    }
+    return false; // clear line-of-sight to light
+}
+
