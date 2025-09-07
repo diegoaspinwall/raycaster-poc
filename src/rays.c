@@ -3,10 +3,8 @@
 bool ray_triangle_intersect(const Ray* r, const Triangle* tri,
                             double tmin, double tmax, Hit* out) // https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
 {
-    Vec3 e1 = vsub(tri->v1, tri->v0);
-    Vec3 e2 = vsub(tri->v2, tri->v0);
-    Vec3 p  = vcross(r->dir, e2);
-    double det = vdot(e1, p);
+    Vec3 p  = vcross(r->dir, tri->e2);
+    double det = vdot(tri->e1, p);
 
     if (fabs(det) < RT_EPS) return false; // parallel or tiny area
     double invDet = 1.0 / det;
@@ -15,20 +13,20 @@ bool ray_triangle_intersect(const Ray* r, const Triangle* tri,
     double u = vdot(tvec, p) * invDet;
     if (u < 0.0 || u > 1.0) return false;
 
-    Vec3 q = vcross(tvec, e1);
+    Vec3 q = vcross(tvec, tri->e1);
     double v = vdot(r->dir, q) * invDet;
     if (v < 0.0 || u + v > 1.0) return false;
 
-    double t = vdot(e2, q) * invDet;
+    double t = vdot(tri->e2, q) * invDet;
     if (t <= tmin || t > tmax) return false;
 
     if (out) {
         out->hit = true;
         out->t   = t;
         out->p   = vadd(r->origin, vscale(r->dir, t));
-        out->n   = vnorm(vcross(e1, e2));
+        // out->n   = vnorm(vcross(e1, e2));
+        out->n   = tri->n_unit;
         out->albedo =  tri->albedo;
-        // out->albedo = v3(1.0, 1.0, 1.0); // white default
     }
     return true;
 }

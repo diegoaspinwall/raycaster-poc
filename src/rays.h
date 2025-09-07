@@ -15,7 +15,9 @@ typedef struct { Point3 origin; Vec3 dir; } Ray;
 // Triangle primitive (single-sided by default)
 typedef struct {
     Point3 v0, v1, v2;
-    Vec3   albedo;     // 0..1 per channel (for now, grayscale ok)
+    Vec3 e1, e2;
+    Vec3 n_unit;
+    Vec3 albedo;     // 0..1 per channel (for now, grayscale ok)
 } Triangle;
 
 typedef struct {

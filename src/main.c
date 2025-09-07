@@ -33,6 +33,14 @@ Triangle tris[] = {
 };
 const int n_tris = (int)(sizeof(tris)/sizeof(tris[0]));
 
+static void build_tri_cache(void) {
+    for (int i=0;i<n_tris;++i) {
+        tris[i].e1 = vsub(tris[i].v1, tris[i].v0);
+        tris[i].e2 = vsub(tris[i].v2, tris[i].v0);
+        tris[i].n_unit = vnorm(vcross(tris[i].e1, tris[i].e2));
+    }
+}
+
 typedef struct {
     uint32_t* fb;   // W*H ARGB32 framebuffer
     int y0, y1;     // [y0, y1) rows to render
@@ -147,6 +155,8 @@ int main(void)
     double ang = 0.0;              // radians
     const double move = 5.0;       // units / s
     const double turn = 2.0;       // rad / s
+
+    build_tri_cache();
 
     uint64_t last = SDL_GetPerformanceCounter();
     bool running = true; SDL_Event e;
