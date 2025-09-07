@@ -13,7 +13,7 @@ SDL_LIBS   := -L/opt/homebrew/lib -lSDL2
 all: $(RT_APP)
 
 $(RT_APP): $(RT_OBJ)
-	$(CC) $(RT_OBJ) $(SDL_LIBS) -o $@
+	$(CC) $(RT_OBJ) $(SDL_LIBS) -pthread -o $@
 
 src/%.o: src/%.c
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -c $< -o $@
