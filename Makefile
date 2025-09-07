@@ -1,6 +1,6 @@
 # SDL2 Raytrace (single-triangle) — focused build
 
-RT_APP := raytrace
+RT_APP := rt
 RT_SRC := src/main.c src/rays.c
 RT_OBJ := $(RT_SRC:.c=.o)
 

@@ -11,29 +11,42 @@
 
 #define W  1280
 #define H  720
+#define k  0.001
+#define VFOV_DEG 60
 
 Triangle tris[] = {
     { .v0 = {  20.0,  20.0, 0.0 }, .v1 = {  20.0, -20.0, 2.0 }, .v2 = {  20.0,  20.0, 2.0 }, .albedo = { 1.0, 1.0, 1.0 } }, // +x
     { .v0 = {  20.0, -20.0, 2.0 }, .v1 = {  20.0,  20.0, 0.0 }, .v2 = {  20.0, -20.0, 0.0 }, .albedo = { 1.0, 1.0, 1.0 } },
+    { .v0 = { -20.0, -20.0, 2.0 }, .v1 = { -20.0,  20.0, 0.0 }, .v2 = { -20.0,  20.0, 2.0 }, .albedo = { 1.0, 1.0, 1.0 } }, // -x
+    { .v0 = { -20.0,  20.0, 0.0 }, .v1 = { -20.0, -20.0, 2.0 }, .v2 = { -20.0, -20.0, 0.0 }, .albedo = { 1.0, 1.0, 1.0 } },
+    { .v0 = { -20.0,  20.0, 2.0 }, .v1 = {  20.0,  20.0, 0.0 }, .v2 = {  20.0,  20.0, 2.0 }, .albedo = { 1.0, 1.0, 1.0 } }, // +y
+    { .v0 = {  20.0,  20.0, 0.0 }, .v1 = { -20.0,  20.0, 2.0 }, .v2 = { -20.0,  20.0, 0.0 }, .albedo = { 1.0, 1.0, 1.0 } },
+    { .v0 = {  20.0, -20.0, 0.0 }, .v1 = { -20.0, -20.0, 2.0 }, .v2 = {  20.0, -20.0, 2.0 }, .albedo = { 1.0, 1.0, 1.0 } }, // -y
+    { .v0 = { -20.0, -20.0, 2.0 }, .v1 = {  20.0, -20.0, 0.0 }, .v2 = { -20.0, -20.0, 0.0 }, .albedo = { 1.0, 1.0, 1.0 } },
+    { .v0 = {  20.0,  20.0, 0.0 }, .v1 = { -20.0,  20.0, 0.0 }, .v2 = { -20.0, -20.0, 0.0 }, .albedo = { 1.0, 1.0, 1.0 } }, // floor
+    { .v0 = {  20.0, -20.0, 0.0 }, .v1 = {  20.0,  20.0, 0.0 }, .v2 = { -20.0, -20.0, 0.0 }, .albedo = { 1.0, 1.0, 1.0 } },
 };
 const int n_tris = (int)(sizeof(tris)/sizeof(tris[0]));
 
-static void render_frame(uint32_t* pixels, int pitch)
+static void render_frame(uint32_t* pixels, int pitch, double pos_x, double pos_y, double azimuth)
 {
     // Camera
     Camera cam = {0};
-    cam.pos = v3(0.0, 0.0, 1.0);
-    cam.forward = vnorm(v3(1.0, 0.0, 0.0));
-    cam.up      = vnorm(v3(0.0, 0.0, 1.0));
-    cam.right   = vnorm(vcross(cam.up, cam.forward));
-    cam.vfov_deg = 60.0;
+    cam.pos = v3(pos_x, pos_y, 1.0);
+    cam.forward = vnorm(v3(cos(azimuth), sin(azimuth), 0.0));
+
+    Vec3 worldUp = v3(0.0, 0.0, 1.0);
+    cam.right   = vnorm(vcross(cam.forward, worldUp));
+    cam.up      = vnorm(vcross(cam.right, cam.forward));
+
+    cam.vfov_deg = VFOV_DEG;
     cam.aspect   = (double)W / (double)H;
 
     // Point light in front of the quad
     Light light = {
-        .pos = v3(0.7, 0.8, -0.8),
+        .pos = v3(-20.0, 20.0, 4.0),
         .color = v3(1.0, 1.0, 1.0),   // white light
-        .intensity = 1.0              // try 1..8 to see the effect
+        .intensity = 4.0              // try 1..8 to see the effect
     };
 
     for (int y = 0; y < H; ++y) {
@@ -56,7 +69,7 @@ static void render_frame(uint32_t* pixels, int pitch)
                 // Shadow test
                 bool blocked = occluded_to_light(best.p, best.n, light.pos, tris, n_tris, 1e-4);
                 if (blocked) {
-                    r = g = b = 10; // in shadow: ambient only
+                    r = g = b = 20; // in shadow: ambient only
                 } else {
                     Vec3 L = vsub(light.pos, best.p);
                     double dist2 = vlen2(L);
@@ -66,7 +79,7 @@ static void render_frame(uint32_t* pixels, int pitch)
                     double diffuse = fmax(0.0, ndotl);
 
                     // Irradiance from light: intensity scales brightness
-                    double atten = 1.0 / (1.0 + 0.002*dist2);
+                    double atten = 1.0 / (1.0 + k*dist2);
 
                     double E = light.intensity * diffuse * atten;
 
@@ -83,7 +96,7 @@ static void render_frame(uint32_t* pixels, int pitch)
                     b = (uint8_t)(bb * 255.0 + 0.5);
                 }
             } else {
-                r = g = b = 25; // background
+                r = g = b = 50; // background
             }
 
             row[x] = (0xFFu<<24) | (r<<16) | (g<<8) | b; // ARGB32
@@ -102,16 +115,46 @@ int main(void)
     SDL_Renderer* ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_Texture* tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, W, H);
 
+    double px = 0.0, py = 0.0;     // player position
+    double ang = 0.0;              // radians
+    const double move = 5.0;       // units / s
+    const double turn = 2.0;       // rad / s
+
+    uint64_t last = SDL_GetPerformanceCounter();
     bool running = true; SDL_Event e;
     while (running) {
+        // --- timestep ---
+        uint64_t now = SDL_GetPerformanceCounter();
+        double dt = (double)(now - last) / SDL_GetPerformanceFrequency();
+        if (dt > 0.033) dt = 0.033; // clamp
+        last = now;
+
+        // --- input ---
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) running = false;
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) running = false;
         }
 
+        const Uint8* ks = SDL_GetKeyboardState(NULL);
+        if (ks[SDL_SCANCODE_LEFT])  ang += turn * dt;
+        if (ks[SDL_SCANCODE_RIGHT]) ang -= turn * dt;
+
+        double dx = cos(ang), dy = sin(ang);
+        double mx = 0, my = 0;
+        if (ks[SDL_SCANCODE_W]) { mx += dx * move * dt; my += dy * move * dt; }
+        if (ks[SDL_SCANCODE_S]) { mx -= dx * move * dt; my -= dy * move * dt; }
+        if (ks[SDL_SCANCODE_A]) { mx += -dy * move * dt; my +=  dx * move * dt; }
+        if (ks[SDL_SCANCODE_D]) { mx +=  dy * move * dt; my += -dx * move * dt; }
+
+        // --- collision ---
+        // TODO
+        px += mx;
+        py += my;
+
+        // --- render ---
         void* pixels; int pitch;
         SDL_LockTexture(tex, NULL, &pixels, &pitch);
-        render_frame((uint32_t*)pixels, pitch);
+        render_frame((uint32_t*)pixels, pitch, px, py, ang);
         SDL_UnlockTexture(tex);
 
         SDL_RenderClear(ren);
