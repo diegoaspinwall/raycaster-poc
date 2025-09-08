@@ -7,7 +7,7 @@
 
 // Epsilon for intersection robustness
 #ifndef RT_EPS
-#define RT_EPS 1e-8
+#define RT_EPS 1e-4f
 #endif
 
 typedef struct { Point3 origin; Vec3 dir; } Ray;
@@ -22,7 +22,7 @@ typedef struct {
 
 typedef struct {
     bool   hit;
-    double t;          // ray parameter (distance along Ray.dir)
+    float  t;          // ray parameter (distance along Ray.dir)
     Point3 p;          // hit position
     Vec3   n;          // geometric normal (unit)
     Vec3   albedo;     // 0..1 per channel (for now, grayscale ok)
@@ -31,18 +31,18 @@ typedef struct {
 typedef struct {
     Vec3  pos;        // light position
     Vec3  color;      // RGB in 0..1 (e.g., white = v3(1,1,1))
-    double intensity; // luminous strength scalar (try 1.0..10.0 to start)
+    float intensity; // luminous strength scalar (try 1.0..10.0 to start)
 } Light;
 
 // Möller–Trumbore ray-triangle; returns true on hit in (tmin, tmax]
 bool ray_triangle_intersect(const Ray* r, const Triangle* tri,
-                            double tmin, double tmax, Hit* out);
+                            float tmin, float tmax, Hit* out);
 
 // Simple Lambert term → 0..255
-uint8_t lambert_to_u8(double nDotL);
+uint8_t lambert_to_u8(float nDotL);
 
 bool occluded_to_light(Point3 p, Vec3 n, Vec3 light_pos,
                        const Triangle* tris, int n_tris,
-                       double bias);
+                       float bias);
 
 #endif

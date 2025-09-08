@@ -17,7 +17,7 @@
 #define W  640
 #define H  360
 */
-#define k  0.001
+#define k  0.001f
 #define VFOV_DEG 60
 
 Triangle tris[] = {
@@ -48,8 +48,8 @@ typedef struct {
     Vec3 forward;     // unit vector
     Vec3 right;       // unit vector
     Vec3 up;          // unit vector
-    double th;        // tan(vfov/2)
-    double aspect;    // W/H
+    float th;        // tan(vfov/2)
+    float aspect;    // W/H
 } CamParams;
 
 typedef struct {
@@ -64,23 +64,23 @@ static void render_rows(uint32_t* fb, int y0, int y1,
 {
     // Point light in front of the quad
     Light light = {
-        .pos = v3(-200.0, 200.0, 40.0),
-        .color = v3(1.0, 1.0, 1.0),
-        .intensity = 300.0
+        .pos = v3(-200.f, 200.f, 40.f),
+        .color = v3(1.f, 1.f, 1.f),
+        .intensity = 300.f
     };
 
     // constants for x stepping
-    const double step = 2.0 / (double)W;
-    const double aspect_th = cam->aspect * cam->th;
+    const float step = 2.f / (float)W;
+    const float aspect_th = cam->aspect * cam->th;
 
     for (int y = y0; y < y1; ++y) {
         // NDC y and projected py are constant across the row
-        double ndc_y = 1.0 - ((y + 0.5) * (2.0 / (double)H));
-        double py = ndc_y * cam->th;
+        float ndc_y = 1.f - ((y + 0.5f) * (2.f / (float)H));
+        float py = ndc_y * cam->th;
 
         // start x at leftmost pixel center
-        double ndc_x = -1.0 + 0.5 * step;
-        double px_val = ndc_x * aspect_th;
+        float ndc_x = -1.f + 0.5f * step;
+        float px_val = ndc_x * aspect_th;
 
         uint32_t* dst = fb + y * pitch_px;
 
@@ -94,12 +94,12 @@ static void render_rows(uint32_t* fb, int y0, int y1,
             Ray ray = { .origin = cam->pos, .dir = dir };
 
             Hit best = {0};
-            best.t = 1e30;
+            best.t = 1e30f;
 
             // Find closest intersection among all tris
             for (int i = 0; i < n_tris; ++i) {
                 Hit h = {0};
-                if (ray_triangle_intersect(&ray, &tris[i], 1e-4, best.t, &h)) {
+                if (ray_triangle_intersect(&ray, &tris[i], 1e-4f, best.t, &h)) {
                     best = h;
                 }
             }
@@ -107,31 +107,31 @@ static void render_rows(uint32_t* fb, int y0, int y1,
             uint8_t r,g,b;
             if (best.hit) {
                 // Shadow test
-                bool blocked = occluded_to_light(best.p, best.n, light.pos, tris, n_tris, 1e-4);
+                bool blocked = occluded_to_light(best.p, best.n, light.pos, tris, n_tris, 1e-4f);
                 if (blocked) {
                     r = g = b = 20; // in shadow: ambient only
                 } else {
                     Vec3 L = vsub(light.pos, best.p);
-                    double dist2 = vlen2(L);
-                    L = vscale(L, 1.0 / sqrt(dist2));
+                    float dist2 = vlen2(L);
+                    L = vscale(L, 1.f / sqrtf(dist2));
 
-                    double ndotl = vdot(best.n, L);
-                    double diffuse = fmax(0.0, ndotl);
+                    float ndotl = vdot(best.n, L);
+                    float diffuse = fmax(0.f, ndotl);
 
-                    double atten = 1.0 / (1.0 + k*dist2);
-                    double E = light.intensity * diffuse * atten; // light.intensity inlined for speed
+                    float atten = 1.f / (1.f + k*dist2);
+                    float E = light.intensity * diffuse * atten; // light.intensity inlined for speed
 
-                    double rr = best.albedo.x * light.color.x * E;
-                    double gg = best.albedo.y * light.color.y * E;
-                    double bb = best.albedo.z * light.color.z * E;
+                    float rr = best.albedo.x * light.color.x * E;
+                    float gg = best.albedo.y * light.color.y * E;
+                    float bb = best.albedo.z * light.color.z * E;
 
-                    rr = rr < 0.0 ? 0.0 : (rr > 1.0 ? 1.0 : rr);
-                    gg = gg < 0.0 ? 0.0 : (gg > 1.0 ? 1.0 : gg);
-                    bb = bb < 0.0 ? 0.0 : (bb > 1.0 ? 1.0 : bb);
+                    rr = rr < 0.f ? 0.f : (rr > 1.f ? 1.f : rr);
+                    gg = gg < 0.f ? 0.f : (gg > 1.f ? 1.f : gg);
+                    bb = bb < 0.f ? 0.f : (bb > 1.f ? 1.f : bb);
 
-                    r = (uint8_t)(rr * 255.0 + 0.5);
-                    g = (uint8_t)(gg * 255.0 + 0.5);
-                    b = (uint8_t)(bb * 255.0 + 0.5);
+                    r = (uint8_t)(rr * 255.f + 0.5f);
+                    g = (uint8_t)(gg * 255.f + 0.5f);
+                    b = (uint8_t)(bb * 255.f + 0.5f);
                 }
             } else {
                 r = g = b = 50; // background
@@ -172,24 +172,24 @@ int main(void)
     if (T < 1) T = 1;
     if (T > 12) T = 12;
 
-    double px = 0.0, py = 0.0;     // player position
-    double ang = 0.0;              // radians
-    const double move = 5.0;       // units / s
-    const double turn = 2.0;       // rad / s
+    float px = 0.f, py = 0.f;     // player position
+    float ang = 0.f;              // radians
+    const float move = 5.f;       // units / s
+    const float turn = 2.f;       // rad / s
 
     build_tri_cache();
 
     // --------- NEW: constants that never change ----------
-    const double aspect = (double)W / (double)H;
-    const double th = tan((VFOV_DEG * M_PI / 180.0) * 0.5);
+    const float aspect = (float)W / (float)H;
+    const float th = tanf((VFOV_DEG * 3.14159265358979323846f / 180.f) * 0.5f);
 
     uint64_t last = SDL_GetPerformanceCounter();
     bool running = true; SDL_Event e;
     while (running) {
         // --- timestep ---
         uint64_t now = SDL_GetPerformanceCounter();
-        double dt = (double)(now - last) / SDL_GetPerformanceFrequency();
-        if (dt > 0.033) dt = 0.033; // clamp
+        float dt = (float)(now - last) / SDL_GetPerformanceFrequency();
+        if (dt > 0.033f) dt = 0.033f; // clamp
         last = now;
 
         // --- input ---
@@ -202,8 +202,8 @@ int main(void)
         if (ks[SDL_SCANCODE_LEFT])  ang += turn * dt;
         if (ks[SDL_SCANCODE_RIGHT]) ang -= turn * dt;
 
-        double dx = cos(ang), dy = sin(ang);
-        double mx = 0, my = 0;
+        float dx = cosf(ang), dy = sinf(ang);
+        float mx = 0.f, my = 0.f;
         if (ks[SDL_SCANCODE_W]) { mx += dx * move * dt; my += dy * move * dt; }
         if (ks[SDL_SCANCODE_S]) { mx -= dx * move * dt; my -= dy * move * dt; }
         if (ks[SDL_SCANCODE_A]) { mx += -dy * move * dt; my +=  dx * move * dt; }
@@ -216,10 +216,10 @@ int main(void)
 
         // --------- NEW: per-frame camera precompute ----------
         CamParams cam = {0};
-        cam.pos = v3(px, py, 1.0);
+        cam.pos = v3(px, py, 1.f);
 
-        Vec3 forward = vnorm(v3(cos(ang), sin(ang), 0.0));
-        Vec3 worldUp = v3(0.0, 0.0, 1.0);
+        Vec3 forward = vnorm(v3(cosf(ang), sinf(ang), 0.f));
+        Vec3 worldUp = v3(0.f, 0.f, 1.f);
         Vec3 right   = vnorm(vcross(forward, worldUp));
         Vec3 up      = vnorm(vcross(right, forward));
 
