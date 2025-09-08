@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "vector.h"
 #include "rays.h"
@@ -41,42 +42,60 @@ static void build_tri_cache(void) {
     }
 }
 
+// --------- NEW: per-frame camera packet ----------
+typedef struct {
+    Vec3 pos;         // camera origin
+    Vec3 forward;     // unit vector
+    Vec3 right;       // unit vector
+    Vec3 up;          // unit vector
+    double th;        // tan(vfov/2)
+    double aspect;    // W/H
+} CamParams;
+
 typedef struct {
     uint32_t* fb;   // W*H ARGB32 framebuffer
     int y0, y1;     // [y0, y1) rows to render
     int pitch_px;   // = W
-    // capture what render_frame needs:
-    double pos_x, pos_y, azimuth;
+    CamParams cam;  // --------- precomputed camera ---------
 } JobArgs;
 
 static void render_rows(uint32_t* fb, int y0, int y1,
-                        int pitch_px, double pos_x, double pos_y, double azimuth)
+                        int pitch_px, const CamParams* cam)
 {
-    // Camera
-    Camera cam = {0};
-    cam.pos = v3(pos_x, pos_y, 1.0);
-    cam.forward = vnorm(v3(cos(azimuth), sin(azimuth), 0.0));
-
-    Vec3 worldUp = v3(0.0, 0.0, 1.0);
-    cam.right   = vnorm(vcross(cam.forward, worldUp));
-    cam.up      = vnorm(vcross(cam.right, cam.forward));
-
-    cam.vfov_deg = VFOV_DEG;
-    cam.aspect   = (double)W / (double)H;
-
     // Point light in front of the quad
     Light light = {
         .pos = v3(-200.0, 200.0, 40.0),
-        .color = v3(1.0, 1.0, 1.0),   // white light
-        .intensity = 300.0              // try 1..8 to see the effect
+        .color = v3(1.0, 1.0, 1.0),
+        .intensity = 300.0
     };
 
+    // constants for x stepping
+    const double step = 2.0 / (double)W;
+    const double aspect_th = cam->aspect * cam->th;
+
     for (int y = y0; y < y1; ++y) {
+        // NDC y and projected py are constant across the row
+        double ndc_y = 1.0 - ((y + 0.5) * (2.0 / (double)H));
+        double py = ndc_y * cam->th;
+
+        // start x at leftmost pixel center
+        double ndc_x = -1.0 + 0.5 * step;
+        double px_val = ndc_x * aspect_th;
+
+        uint32_t* dst = fb + y * pitch_px;
+
         for (int x = 0; x < W; ++x) {
-            Ray ray = camera_primary_ray(&cam, x, y, W, H);
+            // Build primary ray direction from precomputed basis
+            Vec3 dir = vadd(cam->forward,
+                        vadd(vscale(cam->right, px_val),
+                             vscale(cam->up,    py)));
+            dir = vnorm(dir); // keep normalization for safety/consistency
+
+            Ray ray = { .origin = cam->pos, .dir = dir };
 
             Hit best = {0};
             best.t = 1e30;
+
             // Find closest intersection among all tris
             for (int i = 0; i < n_tris; ++i) {
                 Hit h = {0};
@@ -99,10 +118,8 @@ static void render_rows(uint32_t* fb, int y0, int y1,
                     double ndotl = vdot(best.n, L);
                     double diffuse = fmax(0.0, ndotl);
 
-                    // Irradiance from light: intensity scales brightness
                     double atten = 1.0 / (1.0 + k*dist2);
-
-                    double E = light.intensity * diffuse * atten;
+                    double E = light.intensity * diffuse * atten; // light.intensity inlined for speed
 
                     double rr = best.albedo.x * light.color.x * E;
                     double gg = best.albedo.y * light.color.y * E;
@@ -120,7 +137,11 @@ static void render_rows(uint32_t* fb, int y0, int y1,
                 r = g = b = 50; // background
             }
 
-            fb[y*pitch_px + x] = (0xFFu<<24) | (r<<16) | (g<<8) | b; // ARGB32
+            dst[x] = (0xFFu<<24) | (r<<16) | (g<<8) | b; // ARGB32
+
+            // advance x terms
+            ndc_x += step;
+            px_val += step * aspect_th;
         }
     }
 }
@@ -128,7 +149,7 @@ static void render_rows(uint32_t* fb, int y0, int y1,
 static void* worker(void* arg)
 {
     JobArgs* a = (JobArgs*)arg;
-    render_rows(a->fb, a->y0, a->y1, a->pitch_px, a->pos_x, a->pos_y, a->azimuth);
+    render_rows(a->fb, a->y0, a->y1, a->pitch_px, &a->cam);
     return NULL;
 }
 
@@ -157,6 +178,10 @@ int main(void)
     const double turn = 2.0;       // rad / s
 
     build_tri_cache();
+
+    // --------- NEW: constants that never change ----------
+    const double aspect = (double)W / (double)H;
+    const double th = tan((VFOV_DEG * M_PI / 180.0) * 0.5);
 
     uint64_t last = SDL_GetPerformanceCounter();
     bool running = true; SDL_Event e;
@@ -189,9 +214,24 @@ int main(void)
         px += mx;
         py += my;
 
+        // --------- NEW: per-frame camera precompute ----------
+        CamParams cam = {0};
+        cam.pos = v3(px, py, 1.0);
+
+        Vec3 forward = vnorm(v3(cos(ang), sin(ang), 0.0));
+        Vec3 worldUp = v3(0.0, 0.0, 1.0);
+        Vec3 right   = vnorm(vcross(forward, worldUp));
+        Vec3 up      = vnorm(vcross(right, forward));
+
+        cam.forward = forward;
+        cam.right   = right;
+        cam.up      = up;
+        cam.th      = th;      // constant
+        cam.aspect  = aspect;  // constant
+
         // --- render ---
         // Split rows into T chunks
-        pthread_t th[64];
+        pthread_t ths[64];
         JobArgs   ja[64];
         int rows_per = (H + T - 1) / T;
         for (int i = 0; i < T; ++i) {
@@ -201,11 +241,11 @@ int main(void)
 
             ja[i] = (JobArgs){
                 .fb = fb, .y0 = y0, .y1 = y1, .pitch_px = W,
-                .pos_x = px, .pos_y = py, .azimuth = ang
+                .cam = cam
             };
-            pthread_create(&th[i], NULL, worker, &ja[i]);
+            pthread_create(&ths[i], NULL, worker, &ja[i]);
         }
-        for (int i = 0; i < T; ++i) pthread_join(th[i], NULL);
+        for (int i = 0; i < T; ++i) pthread_join(ths[i], NULL);
 
         // Upload once on the main thread
         SDL_UpdateTexture(tex, NULL, fb, W * 4);
