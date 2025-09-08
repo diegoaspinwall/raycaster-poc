@@ -56,23 +56,6 @@ bool ray_triangle_intersect_any(const Ray* r, const Triangle* tri,
     return true;
 }
 
-Ray camera_primary_ray(const Camera* cam, int x, int y, int w, int h)
-{
-    // NDC in [-1,1] with pixel center sampling
-    double ndc_x = ( (x + 0.5) / (double)w ) * 2.0 - 1.0;
-    double ndc_y = 1.0 - ( (y + 0.5) / (double)h ) * 2.0; // flip Y
-
-    // Project to camera plane using vertical FOV
-    double th = tan((cam->vfov_deg * M_PI / 180.0) * 0.5);
-    double px = ndc_x * cam->aspect * th;
-    double py = ndc_y * th;
-
-    Vec3 dir = vnorm(vadd(cam->forward, vadd(vscale(cam->right, px),
-                                             vscale(cam->up,    py))));
-
-    return (Ray){ .origin = cam->pos, .dir = dir };
-}
-
 uint8_t lambert_to_u8(double x)
 {
 	if (x < 0.0) x = 0.0; if (x > 1.0) x = 1.0;

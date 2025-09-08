@@ -28,16 +28,6 @@ typedef struct {
     Vec3   albedo;     // 0..1 per channel (for now, grayscale ok)
 } Hit;
 
-// Simple pinhole camera
-typedef struct {
-    Point3 pos;
-    Vec3   forward;    // normalized
-    Vec3   right;      // normalized
-    Vec3   up;         // normalized (right-handed basis)
-    double vfov_deg;   // vertical field of view in degrees
-    double aspect;     // width / height
-} Camera;
-
 typedef struct {
     Vec3  pos;        // light position
     Vec3  color;      // RGB in 0..1 (e.g., white = v3(1,1,1))
@@ -47,9 +37,6 @@ typedef struct {
 // Möller–Trumbore ray-triangle; returns true on hit in (tmin, tmax]
 bool ray_triangle_intersect(const Ray* r, const Triangle* tri,
                             double tmin, double tmax, Hit* out);
-
-// Generate primary ray through pixel center (x,y) in [0..w-1],[0..h-1]
-Ray camera_primary_ray(const Camera* cam, int x, int y, int w, int h);
 
 // Simple Lambert term → 0..255
 uint8_t lambert_to_u8(double nDotL);
