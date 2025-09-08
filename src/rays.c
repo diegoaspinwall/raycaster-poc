@@ -1,8 +1,9 @@
 #include "rays.h"
 
 bool ray_triangle_intersect(const Ray* r, const Triangle* tri,
-                            double tmin, double tmax, Hit* out) // https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
+                            double tmin, double tmax, Hit* out)
 {
+    // https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
     Vec3 p  = vcross(r->dir, tri->e2);
     double det = vdot(tri->e1, p);
 
@@ -28,6 +29,30 @@ bool ray_triangle_intersect(const Ray* r, const Triangle* tri,
         out->n   = tri->n_unit;
         out->albedo =  tri->albedo;
     }
+    return true;
+}
+
+bool ray_triangle_intersect_any(const Ray* r, const Triangle* tri,
+                            double tmin, double tmax)
+{
+    // just for shadow intersections
+    Vec3 p  = vcross(r->dir, tri->e2);
+    double det = vdot(tri->e1, p);
+
+    if (fabs(det) < RT_EPS) return false; // parallel or tiny area
+    double invDet = 1.0 / det;
+
+    Vec3 tvec = vsub(r->origin, tri->v0);
+    double u = vdot(tvec, p) * invDet;
+    if (u < 0.0 || u > 1.0) return false;
+
+    Vec3 q = vcross(tvec, tri->e1);
+    double v = vdot(r->dir, q) * invDet;
+    if (v < 0.0 || u + v > 1.0) return false;
+
+    double t = vdot(tri->e2, q) * invDet;
+    if (t <= tmin || t > tmax) return false;
+
     return true;
 }
 
@@ -71,9 +96,8 @@ bool occluded_to_light(Point3 p, Vec3 n, Vec3 light_pos,
     double tmin = 1e-4;
     double tmax = distL - 1e-4;
 
-    Hit h;
     for (int i = 0; i < n_tris; ++i) {
-        if (ray_triangle_intersect(&sray, &tris[i], tmin, tmax, &h)) {
+        if (ray_triangle_intersect_any(&sray, &tris[i], tmin, tmax)) {
             return true; // something is between P and the light
         }
     }
