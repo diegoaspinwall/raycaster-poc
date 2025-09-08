@@ -67,18 +67,12 @@ typedef struct {
     int y0, y1;     // [y0, y1) rows to render
     int pitch_px;   // = W
     CamParams cam;  // --------- precomputed camera ---------
+    Light light;
 } JobArgs;
 
 static void render_rows(uint32_t* fb, int y0, int y1,
-                        int pitch_px, const CamParams* cam)
+                        int pitch_px, const CamParams* cam, const Light* light)
 {
-    // Point light in front of the quad
-    Light light = {
-        .pos = v3(-200.f, 200.f, 40.f),
-        .color = v3(1.f, 1.f, 1.f),
-        .intensity = 300.f
-    };
-
     // constants for x stepping
     const float step = 2.f / (float)W;
     const float aspect_th = cam->aspect * cam->th;
@@ -117,11 +111,11 @@ static void render_rows(uint32_t* fb, int y0, int y1,
             uint8_t r,g,b;
             if (best.hit) {
                 // Shadow test
-                bool blocked = occluded_to_light(best.p, best.n, light.pos, tris, n_tris, 1e-4f);
+                bool blocked = occluded_to_light(best.p, best.n, light->pos, tris, n_tris, 1e-4f);
                 if (blocked) {
                     r = g = b = 20; // in shadow: ambient only
                 } else {
-                    Vec3 L = vsub(light.pos, best.p);
+                    Vec3 L = vsub(light->pos, best.p);
                     float dist2 = vlen2(L);
                     L = vscale(L, 1.f / sqrtf(dist2));
 
@@ -129,11 +123,11 @@ static void render_rows(uint32_t* fb, int y0, int y1,
                     float diffuse = fmax(0.f, ndotl);
 
                     float atten = 1.f / (1.f + k*dist2);
-                    float E = light.intensity * diffuse * atten; // light.intensity inlined for speed
+                    float E = light->intensity * diffuse * atten; // light.intensity inlined for speed
 
-                    float rr = best.albedo.x * light.color.x * E;
-                    float gg = best.albedo.y * light.color.y * E;
-                    float bb = best.albedo.z * light.color.z * E;
+                    float rr = best.albedo.x * light->color.x * E;
+                    float gg = best.albedo.y * light->color.y * E;
+                    float bb = best.albedo.z * light->color.z * E;
 
                     rr = rr < 0.f ? 0.f : (rr > 1.f ? 1.f : rr);
                     gg = gg < 0.f ? 0.f : (gg > 1.f ? 1.f : gg);
@@ -159,7 +153,7 @@ static void render_rows(uint32_t* fb, int y0, int y1,
 static void* worker(void* arg)
 {
     JobArgs* a = (JobArgs*)arg;
-    render_rows(a->fb, a->y0, a->y1, a->pitch_px, &a->cam);
+    render_rows(a->fb, a->y0, a->y1, a->pitch_px, &a->cam, &a->light);
     return NULL;
 }
 
@@ -186,6 +180,12 @@ int main(void)
     float ang = 0.f;              // radians
     const float move = 5.f;       // units / s
     const float turn = 2.f;       // rad / s
+
+    float light_ang = 0.f;                 // <-- NEW: light angle (radians)
+    const float light_speed  = 0.05f;       // radians per second
+    const float light_radius = 60.f;       // how wide the orbit is
+    const float light_height = 40.f;       // z height of the light
+    const Vec3  light_center = {0.f, 0.f, 0.f}; // orbit center in XY
 
     build_tri_cache();
 
@@ -239,6 +239,25 @@ int main(void)
         cam.th      = th;      // constant
         cam.aspect  = aspect;  // constant
 
+        // --- light ---
+	// advance light angle
+	light_ang += light_speed * dt;
+	if (light_ang > 6.28318530718f) light_ang -= 6.28318530718f; // keep it bounded
+
+	// compute light position on a circle around Z
+	Vec3 light_pos = v3(
+	    light_center.x + light_radius * cosf(light_ang),
+	    light_center.y + light_radius * sinf(light_ang),
+	    light_height
+	);
+
+	// build the light for this frame
+	Light light = {
+	    .pos = light_pos,
+	    .color = v3(1.f, 1.f, 1.f),
+	    .intensity = 5.f
+	};
+
         // --- render ---
         // Split rows into T chunks
         pthread_t ths[64];
@@ -251,7 +270,8 @@ int main(void)
 
             ja[i] = (JobArgs){
                 .fb = fb, .y0 = y0, .y1 = y1, .pitch_px = W,
-                .cam = cam
+                .cam = cam,
+                .light = light
             };
             pthread_create(&ths[i], NULL, worker, &ja[i]);
         }
