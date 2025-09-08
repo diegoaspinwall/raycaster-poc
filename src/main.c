@@ -113,7 +113,7 @@ static void render_rows(uint32_t* fb, int y0, int y1,
                 // Shadow test
                 bool blocked = occluded_to_light(best.p, best.n, light->pos, tris, n_tris, 1e-4f);
                 if (blocked) {
-                    r = g = b = 20; // in shadow: ambient only
+                    r = g = b = 0; // in shadow: ambient only
                 } else {
                     Vec3 L = vsub(light->pos, best.p);
                     float dist2 = vlen2(L);
@@ -177,9 +177,10 @@ int main(void)
     if (T > 12) T = 12;
 
     float px = 0.f, py = 0.f;     // player position
-    float ang = 0.f;              // radians
+    float azimuth = 0.f, elevation = 0.f;              // radians
     const float move = 5.f;       // units / s
-    const float turn = 2.f;       // rad / s
+    const float turn_lr = 2.f;       // rad / s
+    const float turn_ud = 1.f;       // rad / s
 
     float light_ang = 0.f;                 // <-- NEW: light angle (radians)
     const float light_speed  = 0.05f;       // radians per second
@@ -209,10 +210,16 @@ int main(void)
         }
 
         const Uint8* ks = SDL_GetKeyboardState(NULL);
-        if (ks[SDL_SCANCODE_LEFT])  ang += turn * dt;
-        if (ks[SDL_SCANCODE_RIGHT]) ang -= turn * dt;
+        if (ks[SDL_SCANCODE_LEFT])  azimuth += turn_lr * dt;
+        if (ks[SDL_SCANCODE_RIGHT]) azimuth -= turn_lr * dt;
+        if (ks[SDL_SCANCODE_UP]) elevation += turn_ud * dt;
+        if (ks[SDL_SCANCODE_DOWN]) elevation -= turn_ud * dt;
+        const float half_pi = 1.57079632679f;
+        const float max_pitch = half_pi - 1e-3f;
+        if (elevation >  max_pitch) elevation =  max_pitch;
+        if (elevation < -max_pitch) elevation = -max_pitch;
 
-        float dx = cosf(ang), dy = sinf(ang);
+        float dx = cosf(azimuth), dy = sinf(azimuth);
         float mx = 0.f, my = 0.f;
         if (ks[SDL_SCANCODE_W]) { mx += dx * move * dt; my += dy * move * dt; }
         if (ks[SDL_SCANCODE_S]) { mx -= dx * move * dt; my -= dy * move * dt; }
@@ -228,10 +235,17 @@ int main(void)
         CamParams cam = {0};
         cam.pos = v3(px, py, 1.f);
 
-        Vec3 forward = vnorm(v3(cosf(ang), sinf(ang), 0.f));
-        Vec3 worldUp = v3(0.f, 0.f, 1.f);
-        Vec3 right   = vnorm(vcross(forward, worldUp));
-        Vec3 up      = vnorm(vcross(right, forward));
+	// Forward from yaw (azimuth) and pitch (elevation)
+	Vec3 forward = vnorm(v3(
+	    cosf(elevation) * cosf(azimuth),
+	    cosf(elevation) * sinf(azimuth),
+	    sinf(elevation)
+	));
+
+	Vec3 worldUp = v3(0.f, 0.f, 1.f);
+
+	Vec3 right = vnorm(vcross(forward, worldUp));
+	Vec3 up    = vnorm(vcross(right, forward));
 
         cam.forward = forward;
         cam.right   = right;
