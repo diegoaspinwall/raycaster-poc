@@ -7,7 +7,7 @@ bool ray_triangle_intersect(const Ray* r, const Triangle* tri,
     Vec3 p  = vcross(r->dir, tri->e2);
     float det = vdot(tri->e1, p);
 
-    if (fabs(det) < RT_EPS) return false; // parallel or tiny area
+    if (fabsf(det) < RT_EPS) return false; // parallel or tiny area
     float invDet = 1.f / det;
 
     Vec3 tvec = vsub(r->origin, tri->v0);
@@ -32,14 +32,14 @@ bool ray_triangle_intersect(const Ray* r, const Triangle* tri,
     return true;
 }
 
-bool ray_triangle_intersect_any(const Ray* r, const Triangle* tri,
+bool ray_triangle_intersect_any(const Ray* __restrict r, const Triangle* __restrict tri,
                             float tmin, float tmax)
 {
     // just for shadow intersections
     Vec3 p  = vcross(r->dir, tri->e2);
     float det = vdot(tri->e1, p);
 
-    if (fabs(det) < RT_EPS) return false; // parallel or tiny area
+    if (fabsf(det) < RT_EPS) return false; // parallel or tiny area
     float invDet = 1.f / det;
 
     Vec3 tvec = vsub(r->origin, tri->v0);
@@ -63,7 +63,7 @@ uint8_t lambert_to_u8(float x)
 }
 
 bool occluded_to_light(Point3 p, Vec3 n, Vec3 light_pos,
-                       const Triangle* tris, int n_tris,
+                       const Triangle* __restrict tris, int n_tris,
                        float bias)
 {
     // Start the shadow ray a tiny distance above the surface to avoid self-hit (acne)

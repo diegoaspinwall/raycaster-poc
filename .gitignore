@@ -1,4 +1,4 @@
 *.o
 *.out
 makefile_fast
-src/main_staticlight.c
+src/staticlight_main.c

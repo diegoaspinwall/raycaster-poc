@@ -45,4 +45,32 @@ bool occluded_to_light(Point3 p, Vec3 n, Vec3 light_pos,
                        const Triangle* tris, int n_tris,
                        float bias);
 
+// testing
+static inline __attribute__((always_inline))
+float mt_intersect_t(const Ray* __restrict r,
+                     const Triangle* __restrict tri,
+                     float tmin, float tmax)
+{
+    // Möller–Trumbore with predicate (avoid early returns)
+    Vec3 p  = vcross(r->dir, tri->e2);
+    float det = vdot(tri->e1, p);
+
+    // det ~ 0 => parallel or tiny area
+    bool ok = !(det > -RT_EPS && det < RT_EPS);
+
+    float invDet = 1.0f / det;
+    Vec3  tvec   = vsub(r->origin, tri->v0);
+    float u      = vdot(tvec, p) * invDet;
+    ok = ok && (u >= 0.0f && u <= 1.0f);
+
+    Vec3  q      = vcross(tvec, tri->e1);
+    float v      = vdot(r->dir, q) * invDet;
+    ok = ok && (v >= 0.0f && (u + v) <= 1.0f);
+
+    float t      = vdot(tri->e2, q) * invDet;
+    ok = ok && (t > tmin && t <= tmax);
+
+    return ok ? t : 1e30f; // sentinel for "no hit"
+}
+
 #endif

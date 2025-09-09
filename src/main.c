@@ -68,10 +68,13 @@ typedef struct {
     int pitch_px;   // = W
     CamParams cam;  // --------- precomputed camera ---------
     Light light;
+    const Triangle* tris;
+    int n_tris;
 } JobArgs;
 
-static void render_rows(uint32_t* fb, int y0, int y1,
-                        int pitch_px, const CamParams* cam, const Light* light)
+static void render_rows(uint32_t* __restrict fb, int y0, int y1,
+                        int pitch_px, const CamParams* __restrict cam, const Light* __restrict light,
+                        const Triangle* __restrict tris, int n_tris)
 {
     // constants for x stepping
     const float step = 2.f / (float)W;
@@ -93,20 +96,36 @@ static void render_rows(uint32_t* fb, int y0, int y1,
             Vec3 dir = vadd(cam->forward,
                         vadd(vscale(cam->right, px_val),
                              vscale(cam->up,    py)));
-            dir = vnorm(dir); // keep normalization for safety/consistency
 
             Ray ray = { .origin = cam->pos, .dir = dir };
 
-            Hit best = {0};
-            best.t = 1e30f;
+	    // Fixed tmax so there is no loop-carried dependency
+	    const float tmin = 1e-4f;
+	    const float tmax = 1e30f;
 
-            // Find closest intersection among all tris
-            for (int i = 0; i < n_tris; ++i) {
-                Hit h = {0};
-                if (ray_triangle_intersect(&ray, &tris[i], 1e-4f, best.t, &h)) {
-                    best = h;
-                }
-            }
+	    // Pass 1
+	    float best_t = 1e30f;
+	    for (int i=0;i<n_tris;++i) {
+	        float ti = mt_intersect_t(&ray, &tris[i], tmin, tmax);
+	        best_t = fminf(best_t, ti);
+	    }
+
+	    // Pass 2 (scalar)
+	    int best_i = -1;
+	    for (int i=0;i<n_tris;++i) {
+	        float ti = mt_intersect_t(&ray, &tris[i], tmin, tmax);
+	        if (ti == best_t) { best_i = i; break; }
+	    }
+
+	    Hit best = {0};
+	    if (best_i >= 0) {
+	        const Triangle* tri = &tris[best_i];
+	        best.hit    = true;
+	        best.t      = best_t;
+	        best.p      = vadd(ray.origin, vscale(ray.dir, best_t));
+	        best.n      = tri->n_unit;     // from your cache
+	        best.albedo = tri->albedo;
+	    }
 
             uint8_t r,g,b;
             if (best.hit) {
@@ -120,7 +139,7 @@ static void render_rows(uint32_t* fb, int y0, int y1,
                     L = vscale(L, 1.f / sqrtf(dist2));
 
                     float ndotl = vdot(best.n, L);
-                    float diffuse = fmax(0.f, ndotl);
+                    float diffuse = fmaxf(0.f, ndotl);
 
                     float atten = 1.f / (1.f + k*dist2);
                     float E = light->intensity * diffuse * atten; // light.intensity inlined for speed
@@ -153,7 +172,8 @@ static void render_rows(uint32_t* fb, int y0, int y1,
 static void* worker(void* arg)
 {
     JobArgs* a = (JobArgs*)arg;
-    render_rows(a->fb, a->y0, a->y1, a->pitch_px, &a->cam, &a->light);
+    render_rows(a->fb, a->y0, a->y1, a->pitch_px, &a->cam, &a->light,
+                a->tris, a->n_tris);
     return NULL;
 }
 
@@ -285,8 +305,8 @@ int main(void)
             ja[i] = (JobArgs){
                 .fb = fb, .y0 = y0, .y1 = y1, .pitch_px = W,
                 .cam = cam,
-                .light = light
-            };
+                .light = light,
+                .tris=tris, .n_tris=n_tris };
             pthread_create(&ths[i], NULL, worker, &ja[i]);
         }
         for (int i = 0; i < T; ++i) pthread_join(ths[i], NULL);
