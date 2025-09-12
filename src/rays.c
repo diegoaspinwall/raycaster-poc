@@ -70,14 +70,9 @@ bool occluded_to_light(Point3 p, Vec3 n, Vec3 light_pos,
     Point3 origin = vadd(p, vscale(n, bias));
 
     Vec3  toL = vsub(light_pos, origin);
-    float distL = vlen(toL);
-    Vec3  dir = vscale(toL, 1.f / (distL > 0.f ? distL : 1.f)); // normalize safely
-
-    Ray sray = (Ray){ origin, dir };
-
-    // Any hit closer than the light blocks it
+    Ray sray = (Ray){ origin, toL };     // UNnormalized ray
     float tmin = 1e-4f;
-    float tmax = distL - 1e-4f;
+    float tmax = 1.f - 1e-4f;
 
     for (int i = 0; i < n_tris; ++i) {
         if (ray_triangle_intersect_any(&sray, &tris[i], tmin, tmax)) {
