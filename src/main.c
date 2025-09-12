@@ -93,7 +93,7 @@ static void render_rows(uint32_t* fb, int y0, int y1,
             Vec3 dir = vadd(cam->forward,
                         vadd(vscale(cam->right, px_val),
                              vscale(cam->up,    py)));
-            dir = vnorm(dir); // keep normalization for safety/consistency
+            // dir = vnorm(dir); // keep normalization for safety/consistency
 
             Ray ray = { .origin = cam->pos, .dir = dir };
 
