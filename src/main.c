@@ -168,6 +168,15 @@ int main(void)
     SDL_Renderer* ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_Texture* tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, W, H);
 
+    SDL_RendererInfo info;
+    SDL_GetRendererInfo(ren, &info);
+    fprintf(stderr, "Renderer: %s  vsync=%d  flags=0x%x\n",
+            info.name, !!(info.flags & SDL_RENDERER_PRESENTVSYNC), info.flags);
+
+    SDL_DisplayMode dm;
+    SDL_GetCurrentDisplayMode(0, &dm);
+    fprintf(stderr, "Display refresh: %d Hz\n", dm.refresh_rate); // often 60 on MBA
+
     uint32_t* fb = malloc(W * H * sizeof(uint32_t));
     if (!fb) { fprintf(stderr, "fb alloc failed\n"); return 1;}
 
@@ -202,6 +211,16 @@ int main(void)
         float dt = (float)(now - last) / SDL_GetPerformanceFrequency();
         if (dt > 0.033f) dt = 0.033f; // clamp
         last = now;
+
+	static float acc=0.0, frames=0.0;
+	acc += dt; frames += 1.0;
+	if (acc >= 0.5f) {
+	    float fps = frames / acc;
+	    char title[64];
+	    snprintf(title, sizeof(title), "rt — %.1f FPS", fps);
+	    SDL_SetWindowTitle(win, title);
+	    acc = 0.0; frames = 0.0;
+	}
 
         // --- input ---
         while (SDL_PollEvent(&e)) {
